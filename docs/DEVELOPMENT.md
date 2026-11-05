@@ -77,7 +77,7 @@ Only on a lab VM or a dedicated test machine. Snapshot the VM first.
 | Tool | Status |
 |---|---|
 | KAPE 1.3.0.2 (`--tsource --tdest --target --tflush --vss --module --mdest --mflush`) | Verified (full run) |
-| Velociraptor 0.77.3 (`artifacts list`, `artifacts collect <name> --output <zip>`) | Verified (17 artifacts) |
+| Velociraptor 0.77.3 (`artifacts list`, `artifacts collect <name> --output <zip>`) | Verified (17 artifacts; the 5 browser artifacts added in 3.3.1 are in the build list but not yet run) |
 | go-winpmem (`acquire --nosparse <file>`) | Verified (33.5 GB image) |
 | RawCopy 1.0.0.22 (`/FileNamePath:C:0`, `C:2`, `C:7`, file paths for paging files) | Verified. `$UsnJrnl:$J` is **not** supported. |
 | `fsutil usn queryjournal` / `readjournal <drive> csv` | Verified |

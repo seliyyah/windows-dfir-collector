@@ -2,6 +2,15 @@
 
 All notable changes to `Collect_v3.ps1`. Format based on [Keep a Changelog](https://keepachangelog.com/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [3.3.1]
+
+### Added
+- Velociraptor browser artifacts in the default Full-profile list: `Windows.Applications.Chrome.History`, `Edge.History`, `Chrome.Extensions`, `Firefox.History` and `Firefox.Downloads` (22 artifacts in total). They give a second, independently parsed source of browser history with **UTC** timestamps. `Chrome.Cookies` is deliberately left out.
+- User guide section 7.13 **Browser artifacts**: where parsed and raw browser data lands (SQLECmd CSVs, raw profile files, KAPE copies including shadow-copy versions, Velociraptor zips), what each file holds, how to view it, and what is deliberately not collected.
+
+### Fixed
+- **Documentation said every timestamp in `Parsed\` is UTC.** The SQLECmd browser CSVs (`ChromiumBrowser_*`, columns ending in `(Local)`) are in the local time of the machine that ran SQLECmd, which is the suspect machine. Sections 7.10, 7.13 and 9.3 now say so, so analysts convert before correlating with UTC artifacts.
+
 ## [3.3.0]
 
 ### Added

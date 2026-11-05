@@ -48,7 +48,7 @@
                               NOTE: 7-Zip receives the password on its command line (visible to local admins).
 
 .NOTES
-    Version : 3.3.0
+    Version : 3.3.1
     Tested  : syntax-targeted at Windows PowerShell 5.1 (the common endpoint default).
     VERIFY  : Command-line syntax for third-party tools (memory imagers, RawCopy, Zimmerman tools,
               KAPE, Velociraptor) changes between versions. Test each against the exact versions
@@ -78,13 +78,18 @@ param(
     [string]$KapeVolumeTargets = 'FileSystem,RecycleBin',
     # Windows.KapeFiles.Targets is no longer built in (0.77.3); KAPE already does the file triage.
     # These built-in artifacts parse live state instead. Each runs separately into its own zip.
+    # Browser artifacts output UTC times (unlike SQLECmd's browser maps, which use local time).
+    # Chrome.Cookies is deliberately left out (no cookies, passwords or autofill are collected).
     [string[]]$VelociraptorArtifact = @(
         'Windows.System.Pslist', 'Windows.Network.NetstatEnriched', 'Windows.System.Services',
         'Windows.Sys.StartupItems', 'Windows.System.TaskScheduler', 'Windows.Persistence.PermanentWMIEvents',
         'Windows.Detection.Amcache', 'Windows.Registry.AppCompatCache', 'Windows.Registry.UserAssist',
         'Windows.Forensics.Shellbags', 'Windows.Forensics.Prefetch', 'Windows.Forensics.Lnk',
         'Windows.Forensics.SRUM', 'Windows.Forensics.Timeline', 'Windows.Forensics.RecycleBin',
-        'Windows.Forensics.Usn', 'Windows.NTFS.MFT'),
+        'Windows.Forensics.Usn', 'Windows.NTFS.MFT',
+        'Windows.Applications.Chrome.History', 'Windows.Applications.Edge.History',
+        'Windows.Applications.Chrome.Extensions', 'Windows.Applications.Firefox.History',
+        'Windows.Applications.Firefox.Downloads'),
     [string[]]$VelociraptorArgs = @(),
     [switch]$Archive,
     [securestring]$ArchivePassword
@@ -94,7 +99,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Continue'
 $PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
 
-$ScriptVersion  = '3.3.0'
+$ScriptVersion  = '3.3.1'
 $ScriptStartUtc = [DateTime]::UtcNow
 $Inv            = [Globalization.CultureInfo]::InvariantCulture
 

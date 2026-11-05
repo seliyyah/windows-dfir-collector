@@ -2,7 +2,7 @@
 
 A single PowerShell script that collects forensic evidence from a live Windows machine, in order of volatility. It drives the standard free DFIR toolset (Sysinternals, Eric Zimmerman's tools, KAPE, Velociraptor, WinPmem / Magnet RAM Capture / DumpIt, RawCopy) and writes a hashed, self-documenting collection: a manifest, per-step results, and SHA-256 hashes of every file.
 
-![PowerShell 5.1](https://img.shields.io/badge/PowerShell-5.1-blue) ![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011%20%7C%20Server-informational) ![Version](https://img.shields.io/badge/version-3.3.0-green) ![License: MIT](https://img.shields.io/badge/license-MIT-yellow)
+![PowerShell 5.1](https://img.shields.io/badge/PowerShell-5.1-blue) ![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011%20%7C%20Server-informational) ![Version](https://img.shields.io/badge/version-3.3.1-green) ![License: MIT](https://img.shields.io/badge/license-MIT-yellow)
 
 > 🛡️ **A blue-team tool** for incident responders, forensic analysts and researchers. Use it only on systems you own or are authorized to examine. See [Purpose and responsible use](#purpose-and-responsible-use).
 

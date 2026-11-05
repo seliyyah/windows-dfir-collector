@@ -1,6 +1,6 @@
 # Collect_v3 — Windows DFIR Collection Script: User Guide
 
-**Script version:** 3.3.0  **Runs on:** Windows 10 / 11 / Server 2016+ with Windows PowerShell 5.1  **Needs:** Administrator rights
+**Script version:** 3.3.1  **Runs on:** Windows 10 / 11 / Server 2016+ with Windows PowerShell 5.1  **Needs:** Administrator rights
 
 > 🛡️ Collect_v3 is a **blue-team** tool for incident responders, forensic analysts and researchers. It orchestrates freely available forensic tools, and their authors are credited in the [README](../README.md#credits). Please read [Purpose and responsible use](../README.md#purpose-and-responsible-use) before using it on a real case.
 
@@ -166,7 +166,7 @@ Each profile includes everything in the profiles above it.
 | **Quick** (1) | System time and clock, network connections (joined to processes), TCPView, DNS cache, ARP and routes, SMB sessions, named pipes, port proxies, processes (with hash, signature and owner), logon sessions, services, scheduled tasks, Run keys, WMI subscriptions, BITS, startup commands, IFEO debuggers, shadow-copy list, OS identity, local accounts, disks and BitLocker | 2–3 min |
 | **Standard** (2) | Creates a **shadow copy (VSS snapshot)** and copies from it: all registry hives (system, user and service accounts), Amcache, **all event logs**, Prefetch, scheduled-task XML, setupapi logs, Defender logs, BITS queue, PCA, GPO scripts, Startup folders, PowerShell history. Also: systeminfo, installed software, hotfixes, drivers (and their signatures), USB storage history, PnP devices, AppX packages, Defender, firewall and audit config, gpresult, security settings (LSA, WDigest, RDP, UAC, PowerShell logging), certificate stores, stored credential *names*, Kerberos tickets, local groups, accessibility binaries (sticky-keys check), live export of key event logs, Autoruns, Handle, ListDlls, LogonSessions | ~10 min |
 | **Deep** (3) | SRUM, WMI repository, LNK files and Jump Lists, ActivitiesCache (Timeline), RDP bitmap cache, WER reports, Panther and debug logs, thumbcache, iconcache, WebCache, notifications, OneDrive logs, remote-access tool logs (AnyDesk, TeamViewer, RustDesk, Splashtop), browser artifacts (history, bookmarks, sessions, extensions; **not** cookies, passwords or autofill), raw `$MFT`, `$LogFile` and `$Boot`, the USN journal, Sigcheck of user-writable folders, **all Zimmerman parsers**, extra internal drives (section 5.1) | 30–40 min |
-| **Full** (4) | pagefile, hiberfil and swapfile, the full Recycle Bin, the Windows Search database, MEMORY.DMP, Sigcheck of System32, **KAPE** (`!SANS_Triage` + `!EZParser`), **Velociraptor** (17 artifacts) | 60–100 min |
+| **Full** (4) | pagefile, hiberfil and swapfile, the full Recycle Bin, the Windows Search database, MEMORY.DMP, Sigcheck of System32, **KAPE** (`!SANS_Triage` + `!EZParser`), **Velociraptor** (22 artifacts, including browser history) | 60–100 min |
 | `-Memory` (any profile) | RAM image, taken **first**, before anything else changes memory | 4–5 min for 32 GB |
 
 ---
@@ -189,7 +189,7 @@ Each profile includes everything in the profiles above it.
 | `-KapeModules` | KAPE modules to run after the targets (`''` = none) | `!EZParser` |
 | `-KapeVss` | KAPE also collects every existing shadow copy | off |
 | `-KapeVolumeTargets` | KAPE targets for extra internal drives | `FileSystem,RecycleBin` |
-| `-VelociraptorArtifact` | List of Velociraptor artifacts | 17 built-ins (section 7.12) |
+| `-VelociraptorArtifact` | List of Velociraptor artifacts | 22 built-ins (section 7.12) |
 | `-VelociraptorArgs` | `Name=Value` parameters passed to the artifacts | none |
 | `-NtpServer` | Compare the clock against an NTP server (needs network) | off |
 | `-Archive` | Zip or 7-Zip the finished collection | off |
@@ -371,7 +371,7 @@ The folder tree **mirrors the original paths** (`Disk\Windows\...` = `C:\Windows
 
 ### 7.10 `Parsed\`: Zimmerman tool output (open with Timeline Explorer)
 
-All timestamps are **UTC**. Each tool also leaves a `<Tool>.log` with its console output.
+Timestamps are **UTC**, with one important exception: ⚠️ the **SQLECmd browser CSVs** (`ChromiumBrowser_*`, columns ending in `(Local)`) are in the **local time of the machine that ran SQLECmd**. For these collections that's the suspect machine itself (its time zone is in `manifest.json` → `Time.TimeZone`). Convert them before you line them up with the other CSVs. See section 7.13. Each tool also leaves a `<Tool>.log` with its console output.
 
 | Folder | What it is | Key columns / what to look for |
 |---|---|---|
@@ -385,7 +385,7 @@ All timestamps are **UTC**. Each tool also leaves a `<Tool>.log` with its consol
 | `LECmd\`, `JLECmd\` | LNK files and Jump Lists: files opened | `TargetPath` (or `LocalPath`), target created/modified/accessed times, `DriveType`, `VolumeSerialNumber`, `MachineID`, `MacAddress` |
 | `SrumECmd\` | SRUM | `NetworkUsages`: bytes sent and received **per app per hour** (great for spotting exfiltration). `AppResourceUseInfo`: CPU and disk I/O per app. |
 | `WxTCmd\<user>\` | Windows Timeline | `Activity`: app, file or URL, start and end time |
-| `SQLECmd\` | Browser and app databases | `ChromiumBrowser_HistoryVisits`, `_Downloads`, `_KeywordSearches`, `_OmniboxShortcuts`; Windows `ActivitiesCache`; `NotificationsDB` |
+| `SQLECmd\` | Browser and app databases (⚠️ browser times are **local**, not UTC) | `ChromiumBrowser_HistoryVisits`, `_Downloads`, `_KeywordSearches`, `_OmniboxShortcuts`, `_NetworkActionPredictor`, `_Favicons`; Windows `ActivitiesCache`; `NotificationsDB`. The `SourceFile` column shows which browser and profile each row came from. Full details in section 7.13. |
 | `RBCmd\<drive>\` | Recycle Bin | `FileName` (original path), `DeletedOn`, `FileSize` |
 
 ### 7.11 `KAPE\` (Full)
@@ -401,9 +401,51 @@ All timestamps are **UTC**. Each tool also leaves a `<Tool>.log` with its consol
 
 ### 7.12 `Velociraptor\` (Full)
 
-One zip per artifact: Pslist, NetstatEnriched, Services, StartupItems, TaskScheduler, PermanentWMIEvents, Amcache (Detection.Amcache), AppCompatCache, UserAssist, Shellbags, Prefetch, Lnk, SRUM, Timeline, RecycleBin, Usn, NTFS.MFT. Each zip holds the results as JSON (one row per line) plus any uploaded files. `<artifact>_console.log` holds that run's output. `artifacts_list.txt` lists every artifact in that Velociraptor build.
+One zip per artifact: Pslist, NetstatEnriched, Services, StartupItems, TaskScheduler, PermanentWMIEvents, Amcache (Detection.Amcache), AppCompatCache, UserAssist, Shellbags, Prefetch, Lnk, SRUM, Timeline, RecycleBin, Usn, NTFS.MFT, plus the browser artifacts Chrome.History, Edge.History, Chrome.Extensions, Firefox.History and Firefox.Downloads (times in UTC; a browser that isn't installed simply returns no rows). Each zip holds the results as JSON (one row per line) plus any uploaded files. `<artifact>_console.log` holds that run's output. `artifacts_list.txt` lists every artifact in that Velociraptor build.
 
 **How to analyze:** The easiest route is to import the zips into a Velociraptor server. A local test server works: `velociraptor.exe gui` starts one on your workstation. Then run the server artifact **`Server.Utils.ImportCollection`** to load each zip and browse or query it in the web GUI. You can also unzip a collection and read the JSON results directly.
+
+### 7.13 Browser artifacts: where everything is
+
+Browser evidence lands in up to four places. **Start with the parsed CSVs, then go to the raw files for anything they don't cover.**
+
+**1. Parsed CSVs (Deep and Full):** `Parsed\SQLECmd\`. Open them in Timeline Explorer. File names start with a timestamp.
+
+| File | What's in it |
+|---|---|
+| `*_ChromiumBrowser_HistoryVisits_*.csv` | Every page visit: `URL`, `URLTitle`, `VisitTime (Local)`, `VisitCount`, `TypedCount` (typed into the address bar), `VisitDurationInSeconds`, and `FromVisitID` (which visit led to this one) |
+| `*_ChromiumBrowser_Downloads_*.csv` | Downloads: file name, save path, source URL, start and end time, size |
+| `*_ChromiumBrowser_KeywordSearches_*.csv` | Search terms entered in the address bar or search engines |
+| `*_ChromiumBrowser_OmniboxShortcuts_*.csv` | Text typed in the address bar and the suggestion the user chose |
+| `*_ChromiumBrowser_NetworkActionPredictor_*.csv` | What the user typed and which URL they went to (type-ahead history) |
+| `*_ChromiumBrowser_Favicons_*.csv` | Site icons. These can reveal sites even after history was cleared. |
+| `*_Windows_ActivitiesCacheDB_*.csv` | Windows Timeline, which can include browser activity |
+
+- **"Chromium"** covers Chrome, Edge, Brave, Vivaldi and Opera. When more than one is installed you get one file per browser of the same type.
+- **The `SourceFile` column** (the last column) shows the browser and profile each row came from, for example `...\Microsoft\Edge\User Data\Default\History`. Filter on it.
+- ⚠️ **Time zone:** columns named `... (Local)` are in the local time of the machine that ran SQLECmd. For these collections that's the **suspect machine** (see `manifest.json` → `Time.TimeZone`). Event logs, MFT and Prefetch CSVs are UTC, so convert before you correlate. The Velociraptor browser artifacts (point 4) are in UTC and make a good cross-check.
+
+**2. Raw browser files (Deep and Full):** `Disk\Users\<user>\AppData\...`, copied from the shadow copy
+
+| Browser | Folder | Key files |
+|---|---|---|
+| Chrome | `Local\Google\Chrome\User Data\<profile>\` (usually `Default`, `Profile 1`, ...) | `History` (SQLite: visits, URLs, downloads, searches), `Favicons`, `Shortcuts`, `Top Sites`, `Network Action Predictor`, `Visited Links`, `Bookmarks` (JSON), `Preferences` / `Secure Preferences` (JSON: settings, download folder, extensions), `Sessions\` (open tabs), `Extensions\*\*\manifest.json` |
+| Edge | `Local\Microsoft\Edge\User Data\<profile>\` | Same set as Chrome |
+| Brave, Vivaldi, Opera | Their own `User Data\` folders | Same set, when installed |
+| Firefox | `Roaming\Mozilla\Firefox\Profiles\<profile>\` | `places.sqlite` (history and bookmarks), `downloads.sqlite` / `places.sqlite` downloads, `sessionstore*` (open tabs), `extensions.json` |
+| IE / legacy Edge | `Local\Microsoft\Windows\WebCache\` | `WebCacheV01.dat` (ESE database: history, cache, cookies index) |
+
+**Not collected, on purpose:** `Cookies`, `Login Data` (saved passwords), `Web Data` (autofill and cards), Firefox `key4.db`, `logins.json` and `formhistory.sqlite`.
+
+How to view them:
+- **SQLite files** (`History`, `places.sqlite`, `Favicons`, ...): **DB Browser for SQLite**, opened read-only (tick *Read Only* in the open dialog). Chrome times are microseconds since 1601-01-01 UTC. Firefox times are microseconds since 1970-01-01 UTC.
+- **JSON files** (`Bookmarks`, `Preferences`, `manifest.json`): any text editor. Check `Preferences` for the download folder and the extensions that are turned on.
+- **`WebCacheV01.dat`:** NirSoft BrowsingHistoryView, or an ESE database viewer. Nothing in the script parses this file.
+- **Recovering cleared history:** a cleared `History` database often still holds deleted records in free pages. Specialist SQLite carving tools can recover them, and so can the shadow-copy versions from KAPE (point 3).
+
+**3. KAPE's copy (Full):** `KAPE\Targets\C\Users\<user>\AppData\Local\Google\Chrome\User Data\` and `...\Microsoft\Edge\User Data\`. This is KAPE's own raw copy. With `-KapeVss`, older versions from each shadow copy are in `KAPE\Targets\VSS<n>\Users\...`, which is the best way to see history that was later cleared. `KAPE\Modules\SQLDatabases\` may be empty; use `Parsed\SQLECmd\` for parsed output.
+
+**4. Velociraptor (Full):** `Velociraptor\Windows.Applications.Chrome.History.zip`, `...Edge.History.zip`, `...Chrome.Extensions.zip`, `...Firefox.History.zip` and `...Firefox.Downloads.zip`. These are parsed independently of SQLECmd, with times in **UTC**. Import them with `Server.Utils.ImportCollection` (section 7.12).
 
 ---
 
@@ -450,7 +492,7 @@ One zip per artifact: Pslist, NetstatEnriched, Services, StartupItems, TaskSched
 - The first two columns are added by TLE: **Line** (the original row number) and **Tag** (a checkbox for marking rows).
 - **Bottom-left:** the current file path and the active **filter expression**. **Bottom-right:** total lines and **Visible Lines**. Watch Visible Lines so you always know whether a filter is hiding rows.
 - Timestamps are shown as `yyyy-MM-dd HH:mm:ss`. To change that, use **Tools → Datetime Format** (it's saved in `TimelineExplorer\Settings\TLE_settings.xml`).
-- Timestamps from the Zimmerman tools are **UTC**. Note the host's time zone from `manifest.json` → `Time.TimeZone`. Exception: `Disk\NTFS\UsnJrnl_fsutil_*.csv` is in **local** time.
+- Timestamps from the Zimmerman tools are **UTC**. Note the host's time zone from `manifest.json` → `Time.TimeZone`. Two exceptions are in **local** time: `Disk\NTFS\UsnJrnl_fsutil_*.csv`, and the SQLECmd browser CSVs (`Parsed\SQLECmd\*ChromiumBrowser_*`, columns ending in `(Local)`).
 
 ### 9.4 Sorting and column layout
 
