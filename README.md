@@ -2,7 +2,7 @@
 
 A single PowerShell script that collects forensic evidence from a live Windows machine, in order of volatility. It drives the standard free DFIR toolset (Sysinternals, Eric Zimmerman's tools, KAPE, Velociraptor, WinPmem / Magnet RAM Capture / DumpIt, RawCopy) and writes a hashed, self-documenting collection: a manifest, per-step results, and SHA-256 hashes of every file.
 
-![PowerShell 5.1](https://img.shields.io/badge/PowerShell-5.1-blue) ![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011%20%7C%20Server-informational) ![Version](https://img.shields.io/badge/version-3.3.1-green) ![License: MIT](https://img.shields.io/badge/license-MIT-yellow)
+![PowerShell 5.1](https://img.shields.io/badge/PowerShell-5.1-blue) ![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011%20%7C%20Server-informational) ![Version](https://img.shields.io/badge/version-3.4.0-green) ![License: MIT](https://img.shields.io/badge/license-MIT-yellow)
 
 > 🛡️ **A blue-team tool** for incident responders, forensic analysts and researchers. Use it only on systems you own or are authorized to examine. See [Purpose and responsible use](#purpose-and-responsible-use).
 
@@ -22,11 +22,13 @@ Results go to `X:\Toolkit\Collections\<CaseId>_<COMPUTER>_<UTC time>\`. Use `-Ou
 
 | Profile | Collects | Typical time |
 |---|---|---|
-| `Quick` | Volatile state: processes, network, sessions, services, persistence | 2–3 min |
-| `Standard` | + shadow copy, registry hives, all event logs, Prefetch, system and security config, Autoruns | ~10 min |
-| `Deep` | + `$MFT`, USN journal, SRUM, LNK / Jump Lists, browser artifacts, all Zimmerman parsers, extra internal drives | 30–40 min |
+| `Quick` | Volatile state: processes, network, sessions, services, persistence, event-log channel and ETW tampering checks | 2–3 min |
+| `Standard` | + shadow copy, registry hives, all event logs, Prefetch, system and security config, Autoruns, driver hashes and loaded kernel modules, WFP filters, Sysmon config, SSH keys, PowerShell transcripts, Mark-of-the-Web | ~10 min |
+| `Deep` | + `$MFT`, USN journal, SRUM, LNK / Jump Lists, browser artifacts, all Zimmerman parsers, extra internal drives, RMM tools, IIS, exfiltration-tool search | 30–40 min |
 | `Full` | + KAPE, Velociraptor, pagefile / hiberfil, full Recycle Bin, Sigcheck of System32 | 60–100 min |
 | `-Memory` | RAM image first (any profile) | ~5 min for 32 GB |
+
+Opt-in extras: `-YaraRules <file.yar>` (process-memory YARA scan, Full), `-LolDriversCsv <file>` (match driver hashes against a local LOLDrivers export) and `-DefenderQuarantine` (copies quarantined **malware samples**; see below).
 
 📖 **The full instructions** (every parameter, what every output folder contains and how to analyze it, and a Timeline Explorer refresher) are in **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)**.
 
@@ -39,6 +41,8 @@ Results go to `X:\Toolkit\Collections\<CaseId>_<COMPUTER>_<UTC time>\`. Use `-Ou
 - **Chain of custody:** `manifest.json` (script hash, parameters, host, timing, tool inventory, per-step results) and `FileHashes.csv` (SHA-256 of every collected file).
 - **Resilient:** each step is isolated and recorded as OK / WARN / FAIL / SKIPPED, so a missing tool or failed step never stops the run.
 - **Drive-letter independent:** finds its tools relative to its own location, collects whatever drive Windows is on, and auto-detects extra **internal** disks (USB and virtual disks are excluded).
+- **Tamper and BYOVD awareness:** records whether logging was interfered with (disabled or shrunk event-log channels, stopped ETW/AutoLogger sessions, WFP filters blocking security tools) and hashes every driver, including ones loaded with no service entry, ready for LOLDrivers matching.
+- **No credentials:** configs that can hold secrets (rclone, ngrok, WinSCP, FileZilla, RMM agents, AnyDesk) are recorded as presence and hash only; SSH private keys, cookies, saved passwords and autofill are never collected.
 - **Smart tool handling:** finds tools by file name anywhere under `Tools\`; picks the runnable build (skips .NET builds whose runtime is missing and falls back to KAPE's bundled copies; prefers x64 over x86 and ARM64).
 
 ## Requirements
@@ -81,6 +85,8 @@ Collecting credential-bearing artifacts such as the SAM and SECURITY hives is a 
 - **Authorization:** run it only on systems you own or have written authorization to examine (for example an incident-response engagement, internal investigation, lab or training environment).
 - **Coordination:** shadow-copy creation, memory-driver loading and hive copying look like attacker activity to EDR and antivirus products. Tell your SOC before collecting, so the alerts don't trigger a second incident.
 - **Handling:** a collection can contain password hashes, personal data, browsing history and full memory contents. Store, transfer and destroy it according to your organization's evidence-handling and privacy policies, and the law in your jurisdiction.
+- **`-DefenderQuarantine`:** this opt-in switch copies Defender's quarantine, which means **real malware samples** (RC4-obfuscated with a well-known key, so not directly runnable, but trivially restored). It is never enabled by any profile. Use it only when you need the samples, archive the collection with `-Archive -ArchivePassword`, and store it as malware. The detection metadata is collected without it.
+- **`-YaraRules`:** scanning process memory is slow and can trigger EDR alerts. Coordinate with the SOC first.
 - **Testing:** test changes on a lab VM before using them on a real case.
 
 ## Credits

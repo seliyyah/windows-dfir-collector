@@ -86,6 +86,26 @@ Only on a lab VM or a dedicated test machine. Snapshot the VM first.
 | Extra-internal-volume collection | **Unverified**: no test machine with a second internal disk yet |
 | `-Archive` / 7-Zip, `-NtpServer` | **Unverified** |
 
+### 3.4.0 additions
+
+Tested **without admin rights** through a harness that loads the script's real functions and collector definitions, against a fake system drive with fixtures and traps (private SSH keys, secrets in `client32.ini`, Atera, AnyDesk and `rclone.conf`). No trap secret reached any output. A full elevated run on the lab laptop is still to do.
+
+| Item | Status |
+|---|---|
+| Driver hashes, `EnumDeviceDrivers`, path normalization, `Triage`, LOLDrivers matching | Verified live (456 drivers; works even unelevated) |
+| Event log channel config, code integrity / `Win32_DeviceGuard`, Sysmon "not installed" path, virtual disks, service failure actions | Verified live |
+| Zone.Identifier native scan | Verified (fixtures + a real profile: 25,910 hits in 75 s) |
+| SSH, transcripts (default locations), Notepad/Sticky, MEGAsync, Defender quarantine copy, RMM presence + secret filtering | Verified on fixtures |
+| WFP summary parser | Verified only against a **sample XML written from the documented layout**. Confirm element names against real `netsh wfp show filters` output (needs admin). |
+| `logman query -ets`, `Get-SmbOpenFile`, `netsh wfp` | **Unverified**: need admin |
+| Velociraptor per-artifact args and YARA (rule text with newlines and quotes) | Verified against a **mock** Velociraptor; `Windows.EventLogs.RDPAuth` and `Windows.Detection.Yara.Process` exist in 0.77.3. Real collection **unverified**. The `YaraRule` parameter name is read at run time from `artifacts show`. |
+| Sysmon `-c` with Sysmon installed, IIS (`appcmd list vdir`), transcription policy folders, MeshAgent/NetSupport/SimpleHelp/Action1 discovery, ScreenConnect transfer folder | **Unverified**: not installed on the lab laptop |
+| Exfil tools: version-info match on a renamed real rclone | **Unverified** (name match and `rclone.conf` parsing verified) |
+| MEGAsync log folder path | **Unverified** (community-documented) |
+| Run time of Standard / Deep / Full with the 3.4 additions | **Not measured** yet. Compare with the 3.3.1 baseline (Full + Memory ≈ 92 min, ≈ 72 GB). |
+
+Fixtures still to build on the lab laptop (from the 3.4.0 handoff): load a benign signed test driver through a service and delete the service key; add a WFP block filter for a dummy app; shrink and disable test event-log channels; `sc failure <testsvc> actions= run/60000 command= ...`; a real renamed rclone; a Notepad unsaved tab on Windows 11; a YARA rule matching a known running process.
+
 ## Known benign output
 
 - `<tool>.err` files containing only a Sysinternals copyright banner.

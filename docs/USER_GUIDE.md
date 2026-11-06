@@ -1,6 +1,6 @@
 # Collect_v3 — Windows DFIR Collection Script: User Guide
 
-**Script version:** 3.3.1  **Runs on:** Windows 10 / 11 / Server 2016+ with Windows PowerShell 5.1  **Needs:** Administrator rights
+**Script version:** 3.4.0  **Runs on:** Windows 10 / 11 / Server 2016+ with Windows PowerShell 5.1  **Needs:** Administrator rights
 
 > 🛡️ Collect_v3 is a **blue-team** tool for incident responders, forensic analysts and researchers. It orchestrates freely available forensic tools, and their authors are credited in the [README](../README.md#credits). Please read [Purpose and responsible use](../README.md#purpose-and-responsible-use) before using it on a real case.
 
@@ -163,11 +163,15 @@ Each profile includes everything in the profiles above it.
 
 | Profile | Adds | Typical time |
 |---|---|---|
-| **Quick** (1) | System time and clock, network connections (joined to processes), TCPView, DNS cache, ARP and routes, SMB sessions, named pipes, port proxies, processes (with hash, signature and owner), logon sessions, services, scheduled tasks, Run keys, WMI subscriptions, BITS, startup commands, IFEO debuggers, shadow-copy list, OS identity, local accounts, disks and BitLocker | 2–3 min |
-| **Standard** (2) | Creates a **shadow copy (VSS snapshot)** and copies from it: all registry hives (system, user and service accounts), Amcache, **all event logs**, Prefetch, scheduled-task XML, setupapi logs, Defender logs, BITS queue, PCA, GPO scripts, Startup folders, PowerShell history. Also: systeminfo, installed software, hotfixes, drivers (and their signatures), USB storage history, PnP devices, AppX packages, Defender, firewall and audit config, gpresult, security settings (LSA, WDigest, RDP, UAC, PowerShell logging), certificate stores, stored credential *names*, Kerberos tickets, local groups, accessibility binaries (sticky-keys check), live export of key event logs, Autoruns, Handle, ListDlls, LogonSessions | ~10 min |
-| **Deep** (3) | SRUM, WMI repository, LNK files and Jump Lists, ActivitiesCache (Timeline), RDP bitmap cache, WER reports, Panther and debug logs, thumbcache, iconcache, WebCache, notifications, OneDrive logs, remote-access tool logs (AnyDesk, TeamViewer, RustDesk, Splashtop), browser artifacts (history, bookmarks, sessions, extensions; **not** cookies, passwords or autofill), raw `$MFT`, `$LogFile` and `$Boot`, the USN journal, Sigcheck of user-writable folders, **all Zimmerman parsers**, extra internal drives (section 5.1) | 30–40 min |
-| **Full** (4) | pagefile, hiberfil and swapfile, the full Recycle Bin, the Windows Search database, MEMORY.DMP, Sigcheck of System32, **KAPE** (`!SANS_Triage` + `!EZParser`), **Velociraptor** (22 artifacts, including browser history) | 60–100 min |
+| **Quick** (1) | System time and clock, network connections (joined to processes), TCPView, DNS cache, ARP and routes, SMB sessions, named pipes, port proxies, processes (with hash, signature and owner), logon sessions, services, scheduled tasks, Run keys, WMI subscriptions, BITS, startup commands, IFEO debuggers, shadow-copy list, OS identity, local accounts, disks and BitLocker, **event log channel configuration**, **ETW sessions and AutoLogger settings**, SMB open files | 2–3 min |
+| **Standard** (2) | Creates a **shadow copy (VSS snapshot)** and copies from it: all registry hives (system, user and service accounts), Amcache, **all event logs**, Prefetch, scheduled-task XML, setupapi logs, Defender logs, BITS queue, PCA, GPO scripts, Startup folders, PowerShell history. Also: systeminfo, installed software, hotfixes, drivers (and their signatures), USB storage history, PnP devices, AppX packages, Defender, firewall and audit config, gpresult, security settings (LSA, WDigest, RDP, UAC, PowerShell logging), certificate stores, stored credential *names*, Kerberos tickets, local groups, accessibility binaries (sticky-keys check), live export of key event logs, Autoruns, Handle, ListDlls, LogonSessions. New in 3.4: **driver hashes and loaded kernel modules** (LOLDrivers-ready), code integrity / vulnerable-driver blocklist / VBS, **WFP filters**, Sysmon config, VMs and mounted disk images, service failure actions, SSH keys and configs, PowerShell transcripts, **Mark-of-the-Web** | ~10 min |
+| **Deep** (3) | SRUM, WMI repository, LNK files and Jump Lists, ActivitiesCache (Timeline), RDP bitmap cache, WER reports, Panther and debug logs, thumbcache, iconcache, WebCache, notifications, OneDrive logs, remote-access tool logs (AnyDesk, TeamViewer, RustDesk, Splashtop), browser artifacts (history, bookmarks, sessions, extensions; **not** cookies, passwords or autofill), raw `$MFT`, `$LogFile` and `$Boot`, the USN journal, Sigcheck of user-writable folders, **all Zimmerman parsers**, extra internal drives (section 5.1). New in 3.4: ScreenConnect, Atera, LogMeIn and discovered RMM agents (logs copied, configs presence-only), IIS config and web-root listing, Notepad TabState and Sticky Notes, MEGAsync logs, WFP full state, disk-image file search, **exfiltration-tool search** (rclone, MEGA, ngrok …) | 30–40 min |
+| **Full** (4) | pagefile, hiberfil and swapfile, the full Recycle Bin, the Windows Search database, MEMORY.DMP, Sigcheck of System32, **KAPE** (`!SANS_Triage` + `!EZParser`), **Velociraptor** (23 artifacts, including browser history and RDP logon chains) | 60–100 min |
 | `-Memory` (any profile) | RAM image, taken **first**, before anything else changes memory | 4–5 min for 32 GB |
+| `-YaraRules` (Full, opt-in) | YARA scan of process memory with your rules (Velociraptor `Windows.Detection.Yara.Process`) | slow; depends on rules and process count |
+| `-DefenderQuarantine` (opt-in) | Copy of Defender's quarantine: **malware samples** | depends on quarantine size |
+
+The 3.4 additions haven't been timed on the lab laptop yet. Allow some extra time for Standard and Deep compared with the figures above.
 
 ---
 
@@ -189,8 +193,12 @@ Each profile includes everything in the profiles above it.
 | `-KapeModules` | KAPE modules to run after the targets (`''` = none) | `!EZParser` |
 | `-KapeVss` | KAPE also collects every existing shadow copy | off |
 | `-KapeVolumeTargets` | KAPE targets for extra internal drives | `FileSystem,RecycleBin` |
-| `-VelociraptorArtifact` | List of Velociraptor artifacts | 22 built-ins (section 7.12) |
-| `-VelociraptorArgs` | `Name=Value` parameters passed to the artifacts | none |
+| `-VelociraptorArtifact` | List of Velociraptor artifacts | 23 built-ins (section 7.12) |
+| `-VelociraptorArgs` | `Name=Value` parameters passed to **every** artifact | none |
+| `-VelociraptorArtifactArgs` | Parameters for **one** artifact: `@{ 'Windows.EventLogs.RDPAuth' = @('DateAfter=2026-01-01') }` | none |
+| `-YaraRules C:\path\rules.yar` | **Opt-in, Full only.** Scans process memory with these rules through Velociraptor. The rules file is copied into `Velociraptor\` and hashed. ⚠ Slow, and memory scanning can trigger EDR alerts. The rule text is passed on the command line, so files over ~30,000 characters must be split. | off |
+| `-LolDriversCsv C:\path\drivers.csv` | Local copy of the LOLDrivers export (CSV or JSON from loldrivers.io). Every MD5/SHA-1/SHA-256 in it is matched against `System\drivers_hashed.csv`. No network access. | off |
+| `-DefenderQuarantine` | **Opt-in.** Copy Defender's quarantine to `Security\DefenderQuarantine\`. ⚠ These are **malware samples**. Never enabled by any profile. Use with `-Archive -ArchivePassword`; the script warns loudly if you archive without a password. | off |
 | `-NtpServer` | Compare the clock against an NTP server (needs network) | off |
 | `-Archive` | Zip or 7-Zip the finished collection | off |
 | `-ArchivePassword` | Encrypt the .7z (pass a SecureString: `(Read-Host -AsSecureString)`) | none |
@@ -247,6 +255,9 @@ Every run creates `Collections\<CaseId>_<COMPUTER>_<yyyyMMddTHHmmssZ>\`, for exa
 | `sessions.txt` | Who is logged on right now (`quser` / `qwinsta`) |
 | `installed_software.csv`, `appx_packages.csv`, `hotfixes.csv` | What's installed and when. Look for remote-access tools or recently installed unknown software. |
 | `drivers.csv`, `drivers_signed.txt` | Loaded drivers and whether they're signed. Unsigned drivers deserve a close look. |
+| `drivers_hashed.csv` | **Every driver with SHA-256, SHA-1 and MD5**, signer, issuer, certificate expiry, version info. It merges the service list with the modules **actually loaded in the kernel**. BYOVD "EDR killer" drivers are *validly signed*, so match the hashes against **LOLDrivers** (loldrivers.io); `-LolDriversCsv` does it for you (`LolDriversMatch`). Filter **`Triage` = `review…`**: drivers loaded with **no service entry** that aren't part of Windows (EDR killers often load a driver and then delete its service key), or LOLDrivers hits. `LoadedNoService` alone also lists normal Windows library modules and `dump_*` crash-dump copies. |
+| `virtual_disks.txt` | Hyper-V VMs, mounted VHD/VHDX disks and mounted ISO images, with their image file paths. Some ransomware runs inside a VM to get past EDR. |
+| `virtual_disk_files.csv` (Deep+) | VHD, VHDX, VMDK, VDI, ISO and IMG files under Users, ProgramData, PerfLogs, Windows\Temp and drive roots. **Listed, never copied.** ISO and VHD files are common initial-access containers. |
 | `pnp_devices.csv`, `usbstor.txt` | Devices, including USB storage ever connected (vendor, product, serial) |
 | `disks_bitlocker.txt` | Disks, volumes, BitLocker status |
 | `shadow_copies.txt` | Existing shadow copies. Attackers often delete them; missing copies can be a ransomware sign. |
@@ -263,7 +274,7 @@ Every run creates `Collections\<CaseId>_<COMPUTER>_<yyyyMMddTHHmmssZ>\`, for exa
 | `dns_cache.csv` | Recently resolved host names. Look for C2-looking domains. |
 | `netconfig.txt` | IP config, ARP table, routes, `hosts` file, proxy settings. A modified hosts file or proxy is a red flag. |
 | `net_extra.txt` | Port proxies (a pivoting technique), NetBIOS cache and sessions, neighbors, Wi-Fi profiles |
-| `smb.txt` | SMB sessions, shares, mapped drives. Look for lateral movement. |
+| `smb.txt` | SMB sessions, shares, mapped drives, and **files remote clients currently have open on this host** (`Get-SmbOpenFile`: client, user, path). Look for lateral movement and staging. |
 | `named_pipes.txt` | Named pipes. Some C2 frameworks use recognizable pipe names. |
 
 **Tools:** Timeline Explorer for the CSVs. Check IPs and domains against threat intelligence (VirusTotal, AbuseIPDB).
@@ -289,6 +300,7 @@ Every run creates `Collections\<CaseId>_<COMPUTER>_<yyyyMMddTHHmmssZ>\`, for exa
 | `bits.txt` | BITS jobs (used for stealthy downloads) |
 | `ifeo.csv` | Image File Execution Options "Debugger" and SilentProcessExit entries (hijacks) |
 | `accessibility_binaries.csv` | Hash and signature of sethc, utilman, osk and friends (the "sticky keys" backdoor) |
+| `service_failure_actions.csv` (Standard+) | Services with a **"run a program on failure" command** (`FailureCommand`), plus the `sc qfailure` output. Persistence that `services.csv` doesn't show. Some vendors (NVIDIA, for example) use it legitimately, so check what the command runs. |
 
 **What to look for:** Anything pointing at user-writable paths, script hosts (`powershell`, `wscript`, `mshta`, `rundll32`) with unusual arguments, recently created tasks or services, and **any** IFEO debugger or WMI consumer (both are rare on clean machines). Compare against `Tools\autoruns.csv`.
 
@@ -303,6 +315,12 @@ Every run creates `Collections\<CaseId>_<COMPUTER>_<yyyyMMddTHHmmssZ>\`, for exa
 | `security_products.txt` | Registered antivirus and firewall products |
 | `credential_metadata.txt` | Stored credential **names** (`cmdkey`) and Kerberos tickets (`klist`). No secrets are collected. |
 | `certificates.csv` | Root, CA and TrustedPublisher certificates. Unknown roots can enable interception. |
+| `etw_sessions.txt` (all profiles) | Running ETW trace sessions (`logman query -ets`), a check for expected ones (EventLog-*, DefenderApiLogger, DefenderAuditLogger), AutoLogger sessions disabled at boot (`Start=0`), and the full AutoLogger registry. **Missing Defender or EventLog sessions, or `Start=0` / `Enabled=0` on providers, suggest telemetry tampering.** |
+| `code_integrity.txt` | The **vulnerable driver blocklist** setting (`VulnerableDriverBlocklistEnable`: 0 = disabled), the Device Guard registry, and `Win32_DeviceGuard` (VBS and HVCI/memory integrity configured and running). |
+| `wfp_filters.xml`, `wfp_block_summary.csv` | All **Windows Filtering Platform** filters, which `firewall.txt` doesn't show. The summary lists **BLOCK filters keyed on an application path**, the pattern EDRSilencer-style tools use to cut an EDR off from its cloud. Any block on `MsMpEng.exe`, `MsSense.exe` or another security product's process is a strong red flag. `wfp_state.xml` (Deep+) is the full WFP state and can be tens of MB. |
+| `sysmon_config.txt` | Whether **Sysmon** is installed (found by version info, so a renamed copy is still detected) and its decoded configuration (`<sysmon> -c`, run only for a valid Microsoft-signed binary) plus the driver's registry parameters. Check what the config excludes. |
+| `exfil_tools.csv` (Deep+) | **Exfiltration and tunneling tools** (rclone, restic, MEGA, WinSCP, FileZilla, PuTTY tools, ngrok, cloudflared, chisel, Syncthing, S3 Browser, Cyberduck), matched by file name **and** by version info, so a renamed `rclone` is still found. Hash and signature. **Configs, presence only:** for `rclone.conf` only the remote names and types are recorded (or `encrypted`); `ngrok.yml`, `WinSCP.ini` and FileZilla's server lists are listed with hash, never copied (they hold credentials). |
+| `DefenderQuarantine\` (opt-in) | Only with `-DefenderQuarantine`: a copy of Defender's quarantine. ⚠ **Live malware samples** (RC4-obfuscated with a well-known key, not directly runnable). Handle and store as malware. |
 
 ### 7.7 `EventLogs\`
 
@@ -310,6 +328,7 @@ Every run creates `Collections\<CaseId>_<COMPUTER>_<yyyyMMddTHHmmssZ>\`, for exa
 |---|---|
 | `All\` | **Every** `.evtx` file, copied from the shadow copy (about 350+ files) |
 | `Live\` | Live exports of Security, System, Application, PowerShell and Sysmon (a backup copy) |
+| `channel_config.csv` (all profiles) | Every event log channel: enabled or not, retention mode, **maximum size**, current size, record count, whether it's full, oldest record, last write. **A disabled channel, or a Security log shrunk to a tiny maximum size, is evidence of anti-forensics** even when the log itself looks clean. |
 
 **How to analyze:** Start with the parsed version, `Parsed\EvtxECmd\evtx_all.csv`, in **Timeline Explorer** (section 7.10). For a single log, double-click the `.evtx` to open it in Windows Event Viewer. For fast threat hunting, run **Hayabusa** or **Chainsaw** against the `All\` folder.
 
@@ -355,6 +374,14 @@ The folder tree **mirrors the original paths** (`Disk\Windows\...` = `C:\Windows
 | `SystemFiles\` (Full) | `pagefile_C.sys`, `hiberfil_C.sys`, `swapfile_C.sys` | **hiberfil:** convert with Comae `Hibr2Bin.exe` (in the toolkit) and analyze with Volatility. **pagefile:** `strings`, YARA, bulk_extractor, or load beside the memory image in MemProcFS |
 | `Accessibility_Binaries\` | Copies of sethc.exe / utilman.exe | Compare hashes with known-good |
 | `Volume_D\` (and so on) | Extra internal drives: `root_listing.csv`, `recyclebin_listing.csv`, `$Recycle.Bin\` | Timeline Explorer; RBCmd output |
+| `ProgramData\ssh\`, `Users\<u>\.ssh\` (Standard+) | OpenSSH `authorized_keys`, `administrators_authorized_keys`, `known_hosts`, `config`, `sshd_config`, public host keys and sshd logs. **Private keys are never copied.** A planted key is quiet persistence that Autoruns doesn't check. | Text editor: look for keys nobody recognizes |
+| `Users\<u>\Documents\PowerShell_transcript.*.txt` (Standard+) | PowerShell transcripts from the default locations (`Documents\` and `Documents\<yyyyMMdd>\`), plus any local folder set by transcription policy. A policy folder on a network share is noted, not followed. | Text editor: full command input **and output** |
+| `zone_identifier.csv` (Standard+) | **Mark-of-the-Web** for files in each user's Downloads, Desktop, Documents, Temp and Outlook attachment cache: `ZoneId` (3 = internet), `HostUrl` (where it was downloaded from), `ReferrerUrl`. Read from the snapshot. At Deep+ risky file types up to 50 MB are hashed. Extracting a downloaded zip copies MOTW onto every file inside, so expect thousands of rows. | Timeline Explorer: filter `HostUrl` |
+| `remote_access_presence.csv` (Deep+) | Remote-access / RMM tool configs and files **recorded but not copied** (presence, size, UTC times, SHA-256): ScreenConnect `User.xml` and client `user.config`, files pushed through ScreenConnect (`Temp\ScreenConnect\<ver>\Files\`), Atera configs, AnyDesk `*.conf`, NetSupport `client32.ini` (only `GatewayAddress` / port are read out: the C2 or gateway address), MeshAgent `.msh` (only the server URL), and configs next to any MeshAgent, NetSupport, SimpleHelp, Action1 or ScreenConnect service. | Timeline Explorer |
+| `Program Files\ScreenConnect\`, `...\ATERA Networks\`, `ProgramData\LogMeIn\` (Deep+) | Remote-access logs: ScreenConnect `Session.db`, Atera and LogMeIn logs, and `*.log` / `*.txt` next to discovered RMM services. Paths follow KAPE's `RemoteAdmin` targets. | Text editor; DB Browser for SQLite |
+| `iis_webroot_listing.csv`, `Windows\System32\inetsrv\config\` (Deep+, IIS only) | `applicationHost.config` (lists **native and managed modules**: malicious IIS modules are a known backdoor), every file in every site root with SHA-256 for script and binary types (`.aspx .ashx .asmx .php .jsp .config .dll` …), and each site's `web.config`. Exchange servers have their own web-shell locations, which aren't covered. | Timeline Explorer: sort by `ModifiedUtc`, look for new scripts |
+| `Users\<u>\...\Microsoft.WindowsNotepad_*\LocalState\TabState\` and `...StickyNotes_*\plum.sqlite` (Deep+) | **Unsaved Notepad tabs** (Windows 11) and Sticky Notes. | No parser is bundled: use a community Notepad TabState parser; `plum.sqlite` opens in DB Browser for SQLite |
+| `Users\<u>\AppData\Local\Mega Limited\MEGAsync\logs\` (Deep+) | MEGAsync logs (exfiltration to MEGA). Logs only, no credentials. | Text editor |
 | `_CopyLog.csv` | Every file copied from the shadow copy, with original timestamps (UTC) | Proof of where each file came from |
 
 ### 7.9 `Tools\`: output of the live Sysinternals tools
@@ -401,7 +428,7 @@ Timestamps are **UTC**, with one important exception: ⚠️ the **SQLECmd brows
 
 ### 7.12 `Velociraptor\` (Full)
 
-One zip per artifact: Pslist, NetstatEnriched, Services, StartupItems, TaskScheduler, PermanentWMIEvents, Amcache (Detection.Amcache), AppCompatCache, UserAssist, Shellbags, Prefetch, Lnk, SRUM, Timeline, RecycleBin, Usn, NTFS.MFT, plus the browser artifacts Chrome.History, Edge.History, Chrome.Extensions, Firefox.History and Firefox.Downloads (times in UTC; a browser that isn't installed simply returns no rows). Each zip holds the results as JSON (one row per line) plus any uploaded files. `<artifact>_console.log` holds that run's output. `artifacts_list.txt` lists every artifact in that Velociraptor build.
+One zip per artifact: Pslist, NetstatEnriched, Services, StartupItems, TaskScheduler, PermanentWMIEvents, Amcache (Detection.Amcache), AppCompatCache, UserAssist, Shellbags, Prefetch, Lnk, SRUM, Timeline, RecycleBin, Usn, NTFS.MFT, plus the browser artifacts Chrome.History, Edge.History, Chrome.Extensions, Firefox.History and Firefox.Downloads (times in UTC; a browser that isn't installed simply returns no rows), and **Windows.EventLogs.RDPAuth** (RDP logon chains reconstructed from the event logs). With `-YaraRules`, also `Windows.Detection.Yara.Process.zip` (YARA hits in process memory), with the exact rules used in `yara_rules_<name>.yar` and the artifact definition in `Windows.Detection.Yara.Process.definition.yaml`. Each zip holds the results as JSON (one row per line) plus any uploaded files. `<artifact>_console.log` holds that run's output. `artifacts_list.txt` lists every artifact in that Velociraptor build.
 
 **How to analyze:** The easiest route is to import the zips into a Velociraptor server. A local test server works: `velociraptor.exe gui` starts one on your workstation. Then run the server artifact **`Server.Utils.ImportCollection`** to load each zip and browse or query it in the web GUI. You can also unzip a collection and read the JSON results directly.
 
@@ -458,6 +485,9 @@ How to view them:
 | `SKIPPED - tool not found: X` | Put that tool under `Tools\` (section 3) |
 | `Output is on the SYSTEM drive` / `INTERNAL disk` | Use `-OutputPath` on an external drive |
 | `Only N GB free` | Use a bigger drive, or a smaller profile, or drop `-Memory` |
+| WFP collector: "XML layout not recognised" | The BLOCK summary couldn't find filters in `wfp_filters.xml`. The XML is still collected; review it by hand. |
+| YARA scan skipped | `-YaraRules` only runs in Full. Also check the rules file is under ~30,000 characters, and that `Windows.Detection.Yara.Process.definition.yaml` shows a `YaraRule` parameter. |
+| `zone_identifier.csv` is very large | Normal when users extracted downloaded zips: Windows copies Mark-of-the-Web onto every extracted file. Filter on `HostUrl`. |
 | Defender section shows `0x800106ba` | The Defender service isn't running. Expected on machines with another antivirus product; recorded in `defender.txt`. |
 | A collector shows WARN | Read its Note in `CollectorResults.csv`; usually one item failed and the rest succeeded |
 | Interrupted with Ctrl+C | The shadow copy and temp link are still removed. Check with `vssadmin list shadows`. |
