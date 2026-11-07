@@ -59,7 +59,7 @@
                               NOTE: 7-Zip receives the password on its command line (visible to local admins).
 
 .NOTES
-    Version : 3.4.0
+    Version : 3.4.1
     Tested  : syntax-targeted at Windows PowerShell 5.1 (the common endpoint default).
     VERIFY  : Command-line syntax for third-party tools (memory imagers, RawCopy, Zimmerman tools,
               KAPE, Velociraptor) changes between versions. Test each against the exact versions
@@ -114,7 +114,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Continue'
 $PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
 
-$ScriptVersion  = '3.4.0'
+$ScriptVersion  = '3.4.1'
 $ScriptStartUtc = [DateTime]::UtcNow
 $Inv            = [Globalization.CultureInfo]::InvariantCulture
 
@@ -780,6 +780,49 @@ public static extern uint GetDeviceDriverFileNameW(UIntPtr imageBase, System.Tex
     }
 }
 
+# Names of running ETW sessions straight from QueryAllTracesW. 'logman query -ets' uses the same API but then queries
+# each session's providers, and one bad session makes it print only "Error: The GUID passed was not recognized..."
+# with no session list. Needs admin. Throws (with the Win32 error) when it can't enumerate, so callers never mistake
+# "couldn't look" for "not running".
+function Get-EtwSessionName {
+    if (-not ('DfirNative.Etw' -as [type])) {
+        Add-Type -Namespace DfirNative -Name Etw -MemberDefinition @'
+[DllImport("advapi32.dll", CharSet = CharSet.Unicode)]
+public static extern int QueryAllTracesW([In] IntPtr[] propertyArray, uint propertyArrayCount, out uint loggerCount);
+'@
+    }
+    # EVENT_TRACE_PROPERTIES: WNODE_HEADER (48 bytes), 14 ULONGs, LoggerThreadId (HANDLE), two offset ULONGs; 120 bytes on x64 and x86.
+    $propSize = 120
+    $offLogFile = 104 + [IntPtr]::Size
+    $offLogger = $offLogFile + 4
+    $nameBytes = 1024 * 2
+    $total = $propSize + 2 * $nameBytes
+    $max = 64   # documented maximum for QueryAllTraces
+    $bufs = New-Object IntPtr[] $max
+    try {
+        for ($i = 0; $i -lt $max; $i++) {
+            $p = [Runtime.InteropServices.Marshal]::AllocHGlobal($total)
+            $bufs[$i] = $p
+            [Runtime.InteropServices.Marshal]::Copy((New-Object byte[] $total), 0, $p, $total)
+            [Runtime.InteropServices.Marshal]::WriteInt32($p, 0, $total)                     # Wnode.BufferSize
+            [Runtime.InteropServices.Marshal]::WriteInt32($p, 44, 0x00020000)                # Wnode.Flags = WNODE_FLAG_TRACED_GUID
+            [Runtime.InteropServices.Marshal]::WriteInt32($p, $offLogFile, $propSize + $nameBytes)
+            [Runtime.InteropServices.Marshal]::WriteInt32($p, $offLogger, $propSize)
+        }
+        $count = [uint32]0
+        $rc = [DfirNative.Etw]::QueryAllTracesW($bufs, $max, [ref]$count)
+        if ($rc -ne 0 -and $rc -ne 234) {   # 234 = ERROR_MORE_DATA: the first 64 are still filled in
+            throw (New-Object ComponentModel.Win32Exception $rc).Message
+        }
+        for ($i = 0; $i -lt [Math]::Min([int]$count, $max); $i++) {
+            $off = [Runtime.InteropServices.Marshal]::ReadInt32($bufs[$i], $offLogger)
+            if ($off -gt 0) { [Runtime.InteropServices.Marshal]::PtrToStringUni([IntPtr]($bufs[$i].ToInt64() + $off)) }
+        }
+    } finally {
+        foreach ($p in $bufs) { if ($p -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::FreeHGlobal($p) } }
+    }
+}
+
 # Idempotent: called before Phase 8 (KAPE/Velociraptor don't need our snapshot) and again in the final 'finally'.
 function Remove-Vss {
     if ($Ctx.ShadowLink) {
@@ -906,8 +949,9 @@ Add-Collector -Phase 2 -Level 1 -Name 'Port proxies, NetBIOS, neighbors, IP conf
     $before = $Error.Count
     Invoke-Safe { Get-NetIPConfiguration -Detailed -ErrorAction Stop | Format-List * | Out-String -Width 4096 }
     # Its internal Get-NetRoute/Get-NetIPAddress calls report "No matching MSFT_NetRoute/MSFT_NetIPAddress objects"
-    # for every adapter without a route or address. That is not a failure, so drop just those records.
-    for ($i = $Error.Count - $before - 1; $i -ge 0; $i--) { if ("$($Error[$i])" -match 'No matching MSFT_Net\w+ objects') { $Error.RemoveAt($i) } }
+    # for every adapter without a route or address, and Get-NetConnectionProfile reports "No MSFT_NetConnectionProfile
+    # objects found" for a disconnected adapter (e.g. Wi-Fi). Neither is a failure, so drop just those records.
+    for ($i = $Error.Count - $before - 1; $i -ge 0; $i--) { if ("$($Error[$i])" -match 'No (matching )?MSFT_Net\w+ objects') { $Error.RemoveAt($i) } }
     New-Section 'netsh wlan show profiles'; & $Exe.netsh wlan show profiles 2>&1
     $global:LASTEXITCODE = 0   # informational: nbtstat/wlan return non-zero when there is simply nothing to show
 }
@@ -1303,10 +1347,20 @@ Add-Collector -Phase 4 -Level 1 -Name 'ETW trace sessions and AutoLogger configu
     New-Section 'logman query -ets (running trace sessions)'
     $ets = & $Exe.logman query -ets 2>&1 | Out-String
     $ets
+    New-Section 'Running trace sessions (QueryAllTracesW)'
+    $names = $null
+    try { $names = @(Get-EtwSessionName | Where-Object { $_ } | Sort-Object -Unique); $names; "($($names.Count) sessions)" }
+    catch { "Could not enumerate ETW sessions: $($_.Exception.Message)" }
     New-Section 'Expected sessions (informational)'
+    $known = $null
+    if ($null -ne $names -and $names.Count -gt 0) { $known = $names; 'Source: QueryAllTracesW' }
+    elseif ($ets -match '(?m)^\S.*\s(Trace|Alert|Counter|Configuration)\s+(Running|Stopped)\s*$') { $known = $ets; 'Source: logman' }
     foreach ($s in 'EventLog-System', 'EventLog-Application', 'EventLog-Security', 'DefenderApiLogger', 'DefenderAuditLogger') {
-        '{0,-22} {1}' -f $s, $(if ($ets -match [regex]::Escape($s)) { 'running' } else { 'NOT running (check whether it should be on this host)' })
+        if ($null -eq $known) { '{0,-22} UNKNOWN (no session list available)' -f $s; continue }
+        $hit = if ($known -is [array]) { $known -contains $s } else { $known -match "(?m)^$([regex]::Escape($s))\s" }
+        '{0,-22} {1}' -f $s, $(if ($hit) { 'running' } else { 'NOT running (check whether it should be on this host)' })
     }
+    if ($null -eq $known) { Write-Error 'Neither QueryAllTracesW nor logman returned a session list; expected-session check not done' }
     New-Section 'AutoLogger sessions with Start=0 (disabled at boot)'
     $al = 'Registry::HKLM\SYSTEM\CurrentControlSet\Control\WMI\Autologger'
     $off = foreach ($k in @(Get-ChildItem -LiteralPath $al -ErrorAction Ignore)) {

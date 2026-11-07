@@ -2,6 +2,19 @@
 
 All notable changes to `Collect_v3.ps1`. Format based on [Keep a Changelog](https://keepachangelog.com/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [3.4.1]
+
+Fixes from the first elevated Full + Memory run of 3.4.0 on the lab laptop (104 OK, 1 WARN, 5 expected SKIPs, no FAILs).
+
+### Fixed
+- **ETW check reported a false finding.** `logman query -ets` can fail as a whole ("The GUID passed was not recognized as valid by a WMI data provider") when one session can't be queried. The expected-session check then reported EventLog-System, EventLog-Security, DefenderApiLogger and the others as **NOT running**. Session names are now also read directly with `QueryAllTracesW`. If no session list can be read, each check says `UNKNOWN` and the step is marked WARN, instead of claiming the sessions are stopped.
+- **False WARN in the network extras collector** on hosts with a disconnected adapter: "No MSFT_NetConnectionProfile objects found…" from `Get-NetIPConfiguration` is now treated like the other harmless "no matching object" records.
+
+### Verified
+- WFP: the real `netsh wfp show filters` XML matches the parser (922 filters, 20 BLOCK filters with an application path, all Windows Service Hardening rules on a clean host).
+- `Get-SmbOpenFile`, Velociraptor with `Windows.EventLogs.RDPAuth` (23 artifacts, 0 failed).
+- The 3.4.0 collectors add about 4.5 minutes to a Full run.
+
 ## [3.4.0]
 
 Collector additions from a review of 3.3.1. 20 new collectors (110 in total, up from 90), plus new sections in the existing SMB and Velociraptor collectors.

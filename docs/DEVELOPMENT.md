@@ -88,21 +88,23 @@ Only on a lab VM or a dedicated test machine. Snapshot the VM first.
 
 ### 3.4.0 additions
 
-Tested **without admin rights** through a harness that loads the script's real functions and collector definitions, against a fake system drive with fixtures and traps (private SSH keys, secrets in `client32.ini`, Atera, AnyDesk and `rclone.conf`). No trap secret reached any output. A full elevated run on the lab laptop is still to do.
+First tested **without admin rights** through a harness that loads the script's real functions and collector definitions, against a fake system drive with fixtures and traps (private SSH keys, secrets in `client32.ini`, Atera, AnyDesk and `rclone.conf`). No trap secret reached any output. Then one elevated `Full -Memory -KapeVss` run on the lab laptop (3.4.0: 104 OK, 1 WARN, 5 expected SKIPs, 0 FAIL; the WARN and the ETW false finding were fixed in 3.4.1).
 
 | Item | Status |
 |---|---|
 | Driver hashes, `EnumDeviceDrivers`, path normalization, `Triage`, LOLDrivers matching | Verified live (456 drivers; works even unelevated) |
 | Event log channel config, code integrity / `Win32_DeviceGuard`, Sysmon "not installed" path, virtual disks, service failure actions | Verified live |
-| Zone.Identifier native scan | Verified (fixtures + a real profile: 25,910 hits in 75 s) |
+| Zone.Identifier native scan | Verified (fixtures + a real profile: 25,909 hits in 77 s from the snapshot) |
 | SSH, transcripts (default locations), Notepad/Sticky, MEGAsync, Defender quarantine copy, RMM presence + secret filtering | Verified on fixtures |
-| WFP summary parser | Verified only against a **sample XML written from the documented layout**. Confirm element names against real `netsh wfp show filters` output (needs admin). |
-| `logman query -ets`, `Get-SmbOpenFile`, `netsh wfp` | **Unverified**: need admin |
-| Velociraptor per-artifact args and YARA (rule text with newlines and quotes) | Verified against a **mock** Velociraptor; `Windows.EventLogs.RDPAuth` and `Windows.Detection.Yara.Process` exist in 0.77.3. Real collection **unverified**. The `YaraRule` parameter name is read at run time from `artifacts show`. |
+| WFP: `netsh wfp show filters/state file=` and the summary parser | Verified elevated (922 filters, 20 BLOCK-by-app, app paths decoded from `asString`) |
+| `Get-SmbOpenFile` | Verified elevated (no open files) |
+| `logman query -ets` | Elevated, it **failed as a whole** on the lab laptop ("The GUID passed was not recognized as valid by a WMI data provider"). 3.4.1 adds `QueryAllTracesW` (`Get-EtwSessionName`) and `UNKNOWN` instead of a false "NOT running". The native enumeration is **unverified elevated** (unelevated it correctly returns 0 sessions). |
+| Velociraptor per-artifact args, `Windows.EventLogs.RDPAuth` | Verified real (23 artifacts, 0 failed, 388 s) |
+| Velociraptor YARA (rule text with newlines and quotes) | Verified against a **mock** Velociraptor only. The `YaraRule` parameter name is read at run time from `artifacts show`. Real `-YaraRules` run **unverified**. |
 | Sysmon `-c` with Sysmon installed, IIS (`appcmd list vdir`), transcription policy folders, MeshAgent/NetSupport/SimpleHelp/Action1 discovery, ScreenConnect transfer folder | **Unverified**: not installed on the lab laptop |
 | Exfil tools: version-info match on a renamed real rclone | **Unverified** (name match and `rclone.conf` parsing verified) |
 | MEGAsync log folder path | **Unverified** (community-documented) |
-| Run time of Standard / Deep / Full with the 3.4 additions | **Not measured** yet. Compare with the 3.3.1 baseline (Full + Memory ≈ 92 min, ≈ 72 GB). |
+| Run time with the 3.4 additions | The new collectors total ≈ 4.5 min. The 3.4.0 Full + Memory run took 130 min and 73 GB against a 92 min baseline, but the extra time was all I/O-bound steps (memory image 255 → 1012 s, RawCopy 298 → 689 s, KAPE 2325 → 3066 s): the output drive ran at USB 2.0 speed (~33 MB/s). Re-measure on a USB 3 port. |
 
 Fixtures still to build on the lab laptop (from the 3.4.0 handoff): load a benign signed test driver through a service and delete the service key; add a WFP block filter for a dummy app; shrink and disable test event-log channels; `sc failure <testsvc> actions= run/60000 command= ...`; a real renamed rclone; a Notepad unsaved tab on Windows 11; a YARA rule matching a known running process.
 
@@ -110,3 +112,4 @@ Fixtures still to build on the lab laptop (from the 3.4.0 handoff): load a benig
 
 - `<tool>.err` files containing only a Sysinternals copyright banner.
 - `Skipped ...: needs .NET 10.0.0 runtime` during tool discovery, when a KAPE-bundled fallback is found.
+- `wfp_block_summary.csv` rows with provider `FWPM_PROVIDER_MPSSVC_WSH` (Windows Service Hardening: SearchFilterHost, dmcertinst, omadmclient and similar). A clean Windows 10 host has about 20 of them.

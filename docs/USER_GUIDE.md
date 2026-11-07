@@ -1,6 +1,6 @@
 # Collect_v3 — Windows DFIR Collection Script: User Guide
 
-**Script version:** 3.4.0  **Runs on:** Windows 10 / 11 / Server 2016+ with Windows PowerShell 5.1  **Needs:** Administrator rights
+**Script version:** 3.4.1  **Runs on:** Windows 10 / 11 / Server 2016+ with Windows PowerShell 5.1  **Needs:** Administrator rights
 
 > 🛡️ Collect_v3 is a **blue-team** tool for incident responders, forensic analysts and researchers. It orchestrates freely available forensic tools, and their authors are credited in the [README](../README.md#credits). Please read [Purpose and responsible use](../README.md#purpose-and-responsible-use) before using it on a real case.
 
@@ -315,7 +315,7 @@ Every run creates `Collections\<CaseId>_<COMPUTER>_<yyyyMMddTHHmmssZ>\`, for exa
 | `security_products.txt` | Registered antivirus and firewall products |
 | `credential_metadata.txt` | Stored credential **names** (`cmdkey`) and Kerberos tickets (`klist`). No secrets are collected. |
 | `certificates.csv` | Root, CA and TrustedPublisher certificates. Unknown roots can enable interception. |
-| `etw_sessions.txt` (all profiles) | Running ETW trace sessions (`logman query -ets`), a check for expected ones (EventLog-*, DefenderApiLogger, DefenderAuditLogger), AutoLogger sessions disabled at boot (`Start=0`), and the full AutoLogger registry. **Missing Defender or EventLog sessions, or `Start=0` / `Enabled=0` on providers, suggest telemetry tampering.** |
+| `etw_sessions.txt` (all profiles) | Running ETW trace sessions (`logman query -ets`, plus a list read directly with `QueryAllTracesW`, which still works when logman fails with "The GUID passed was not recognized"), a check for expected ones (EventLog-*, DefenderApiLogger, DefenderAuditLogger; `UNKNOWN` means no session list could be read, not that they are stopped), AutoLogger sessions disabled at boot (`Start=0`), and the full AutoLogger registry. **Missing Defender or EventLog sessions, or `Start=0` / `Enabled=0` on providers, suggest telemetry tampering.** |
 | `code_integrity.txt` | The **vulnerable driver blocklist** setting (`VulnerableDriverBlocklistEnable`: 0 = disabled), the Device Guard registry, and `Win32_DeviceGuard` (VBS and HVCI/memory integrity configured and running). |
 | `wfp_filters.xml`, `wfp_block_summary.csv` | All **Windows Filtering Platform** filters, which `firewall.txt` doesn't show. The summary lists **BLOCK filters keyed on an application path**, the pattern EDRSilencer-style tools use to cut an EDR off from its cloud. Any block on `MsMpEng.exe`, `MsSense.exe` or another security product's process is a strong red flag. `wfp_state.xml` (Deep+) is the full WFP state and can be tens of MB. |
 | `sysmon_config.txt` | Whether **Sysmon** is installed (found by version info, so a renamed copy is still detected) and its decoded configuration (`<sysmon> -c`, run only for a valid Microsoft-signed binary) plus the driver's registry parameters. Check what the config excludes. |
