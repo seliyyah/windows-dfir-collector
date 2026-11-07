@@ -98,7 +98,7 @@ First tested **without admin rights** through a harness that loads the script's 
 | SSH, transcripts (default locations), Notepad/Sticky, MEGAsync, Defender quarantine copy, RMM presence + secret filtering | Verified on fixtures |
 | WFP: `netsh wfp show filters/state file=` and the summary parser | Verified elevated (922 filters, 20 BLOCK-by-app, app paths decoded from `asString`) |
 | `Get-SmbOpenFile` | Verified elevated (no open files) |
-| `logman query -ets` | Elevated, it **failed as a whole** on the lab laptop ("The GUID passed was not recognized as valid by a WMI data provider"). 3.4.1 adds `QueryAllTracesW` (`Get-EtwSessionName`) and `UNKNOWN` instead of a false "NOT running". The native enumeration is **unverified elevated** (unelevated it correctly returns 0 sessions). |
+| `logman query -ets` | Elevated, it **failed as a whole** on the lab laptop ("The GUID passed was not recognized as valid by a WMI data provider"). 3.4.1 adds `QueryAllTracesW` (`Get-EtwSessionName`) and `UNKNOWN` instead of a false "NOT running". The native enumeration is verified elevated (27 sessions, matching logman; unelevated it correctly returns 0). |
 | Velociraptor per-artifact args, `Windows.EventLogs.RDPAuth` | Verified real (23 artifacts, 0 failed, 388 s) |
 | Velociraptor YARA (rule text with newlines and quotes) | Verified against a **mock** Velociraptor only. The `YaraRule` parameter name is read at run time from `artifacts show`. Real `-YaraRules` run **unverified**. |
 | Sysmon `-c` with Sysmon installed, IIS (`appcmd list vdir`), transcription policy folders, MeshAgent/NetSupport/SimpleHelp/Action1 discovery, ScreenConnect transfer folder | **Unverified**: not installed on the lab laptop |
